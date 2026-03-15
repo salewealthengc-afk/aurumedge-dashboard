@@ -360,6 +360,9 @@ const BASE_URL   = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?t
 // ═══════════════════════════════════════════════════════════
 // FETCH GOOGLE SHEETS DATA
 // ═══════════════════════════════════════════════════════════
+
+
+// ═══════════════════════════════════════════════════════════
 async function fetchSheet(sheetName) {
   try {
     const url = BASE_URL + encodeURIComponent(sheetName) + '&t=' + Date.now();
@@ -381,556 +384,6 @@ async function fetchSheet(sheetName) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// PARSE SUMMARY SHEET
-// ═══════════════════════════════════════════════════════════
-  const map = {};
-  rows.forEach(r => {
-    const key = r[Object.keys(r)[0]];
-    const val = r[Object.keys(r)[1]];
-    if (key) map[key] = val;
-  });
-  return map;
-}
-
-// ═══════════════════════════════════════════════════════════
-// UPDATE KPIs
-// ═══════════════════════════════════════════════════════════
-  document.getElementById('k-bal').textContent = summary["Balance"] || "—";
-  document.getElementById('k-wr').textContent  = summary["Win Rate"] || "—";
-  document.getElementById('k-tot').textContent = summary["Total Trades"] || "—";
-  document.getElementById('k-wl').textContent  = `${summary["Wins"]||'—'} W / ${summary["Losses"]||'—'} L`;
-  document.getElementById('t-time').textContent= summary["Last Updated"] || "—";
-
-  const pnl = String(summary["Total PnL"] || '—');
-  const pnlEl = document.getElementById('k-pnl');
-  pnlEl.textContent = pnl;
-  pnlEl.className = 'kpi-value ' + (pnl.startsWith('-') ? 'r' : 'g');
-
-  const avg = String(summary["Avg PnL/Trade"] || '—');
-  const avgEl = document.getElementById('k-avg');
-  avgEl.textContent = avg;
-  avgEl.className = 'kpi-value ' + (avg.startsWith('-') ? 'r' : 'g');
-
-  // Open order
-  const orderStr = String(summary["Status"] || '');
-  const wrap = document.getElementById('order-wrap');
-  if (!orderStr || orderStr === "No Open Position" || orderStr === "null") {
-    wrap.innerHTML = '<div class="no-order">— NO OPEN POSITION —</div>';
-  } else {
-    const parts  = orderStr.split('|').map(s => s.trim());
-    const dirPart= parts[0] || '';
-    const dir    = dirPart.includes('BUY') ? 'BUY' : 'SELL';
-    const cls    = dir.toLowerCase();
-    wrap.innerHTML = `
-      <div class="order-box ${cls}">
-        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:8px">
-          <div class="order-dir ${cls}">${dir}</div>
-          <div class="order-entry">${dirPart.replace(dir,'').replace('@','').trim()}</div>
-        </div>
-        <div class="order-meta">${parts.slice(1).join('<br>')}</div>
-      </div>`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// EQUITY CURVE
-// ═══════════════════════════════════════════════════════════
-  const canvas = document.getElementById('eq-canvas');
-  const W = canvas.offsetWidth || 600;
-  const H = 220;
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
-
-  const bals = trades.map(t => parseFloat(String(t.balance||t.Balance||0).replace(/[$,]/g,''))).filter(b=>b>0);
-  if (bals.length < 2) {
-    ctx.fillStyle = '#2A2318'; ctx.font = '11px JetBrains Mono';
-    ctx.textAlign = 'center';
-    ctx.fillText('Waiting for trade data...', W/2, H/2);
-    return;
-  }
-
-  const minB = Math.min(...bals) * 0.995;
-  const maxB = Math.max(...bals) * 1.005;
-  const pad  = { l:10, r:80, t:12, b:24 };
-  const iW   = W - pad.l - pad.r;
-  const iH   = H - pad.t - pad.b;
-  const toX  = i => pad.l + (i / Math.max(bals.length-1,1)) * iW;
-  const toY  = v => pad.t + iH - ((v-minB)/(maxB-minB)) * iH;
-
-  ctx.clearRect(0,0,W,H);
-
-  // Grid
-  for (let g=0; g<=4; g++) {
-    const y = pad.t + (g/4)*iH;
-    const v = maxB - (g/4)*(maxB-minB);
-    ctx.strokeStyle='#181818'; ctx.lineWidth=1;
-    ctx.setLineDash([2,4]);
-    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle='#4A3E28'; ctx.font='9px JetBrains Mono'; ctx.textAlign='left';
-    ctx.fillText('$'+v.toLocaleString('en',{maximumFractionDigits:0}), W-pad.r+8, y+3);
-  }
-
-  // Gradient fill
-  const grad = ctx.createLinearGradient(0,pad.t,0,H);
-  grad.addColorStop(0,'rgba(201,168,76,0.20)');
-  grad.addColorStop(1,'rgba(201,168,76,0.00)');
-  ctx.beginPath();
-  ctx.moveTo(toX(0), toY(bals[0]));
-  bals.forEach((b,i)=>{ if(i>0) ctx.lineTo(toX(i), toY(b)); });
-  ctx.lineTo(toX(bals.length-1), H-pad.b);
-  ctx.lineTo(toX(0), H-pad.b);
-  ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
-
-  // Line
-  ctx.beginPath();
-  ctx.moveTo(toX(0), toY(bals[0]));
-  bals.forEach((b,i)=>{ if(i>0) ctx.lineTo(toX(i), toY(b)); });
-  ctx.strokeStyle='#C9A84C'; ctx.lineWidth=1.5; ctx.stroke();
-
-  // Dots
-  trades.forEach((t,i)=>{
-    if(i>=bals.length) return;
-    const res = String(t.result||t.Result||'');
-    ctx.beginPath();
-    ctx.arc(toX(i), toY(bals[i]), 2, 0, Math.PI*2);
-    ctx.fillStyle = res==='WIN' ? '#4CAF7D' : '#E05252';
-    ctx.fill();
-  });
-
-  document.getElementById('eq-range').textContent = `${bals.length} trades`;
-}
-
-// ═══════════════════════════════════════════════════════════
-// SESSION WR
-// ═══════════════════════════════════════════════════════════
-  const wrap = document.getElementById('sess-wrap');
-  const rows = sessRows.filter(r => {
-    const v = Object.values(r)[0];
-    return v && !String(v).toLowerCase().includes('session');
-  });
-  if (!rows.length) { wrap.innerHTML='<div class="loading">No data</div>'; return; }
-
-  wrap.innerHTML = rows.map(r => {
-    const cols   = Object.values(r);
-    const name   = String(cols[0]||'');
-    const trades = cols[1]||0;
-    const wrRaw  = String(cols[4]||'0');
-    const wrNum  = parseFloat(wrRaw.replace('%',''));
-    const wrDisp = wrNum > 0 ? wrNum.toFixed(1)+'%' : '—';
-    const color  = wrNum>=55 ? '#4CAF7D' : wrNum>=50 ? '#C9A84C' : '#E05252';
-    return `<div class="sess-row">
-      <div class="sess-name">${name}</div>
-      <div class="sess-bar-bg"><div class="sess-bar-fill" style="width:${Math.min(wrNum,100)}%;background:${color}"></div></div>
-      <div class="sess-wr" style="color:${color}">${wrDisp}</div>
-      <div class="sess-n">${trades} tr</div>
-    </div>`;
-  }).join('');
-}
-
-// ═══════════════════════════════════════════════════════════
-// DAILY SUMMARY
-// ═══════════════════════════════════════════════════════════
-  const wrap     = document.getElementById('daily-wrap');
-  const todayPnl = String(summary["Today's PnL"]||'$0.00');
-  const items = [
-    { label:'Today Trades', val: summary['Today Trades']||'0',     cls:'day-val' },
-    { label:"Today's PnL",  val: todayPnl,                        cls:'day-val '+(todayPnl.startsWith('-')?'red':'green') },
-    { label:"Today's WR",   val: summary["Today's WR"]||'—',      cls:'day-val gold' },
-    { label:'Best Trade',   val: summary['Best Trade']||'—',      cls:'day-val green' },
-    { label:'Worst Trade',  val: summary['Worst Trade']||'—',     cls:'day-val red' },
-    { label:'Avg Win',      val: summary['Avg Win']||'—',         cls:'day-val green' },
-  ];
-  wrap.innerHTML = items.map(item=>`
-    <div class="day-row">
-      <div class="day-label">${item.label}</div>
-      <div class="${item.cls}">${item.val!=null?item.val:'—'}</div>
-    </div>`).join('');
-}
-
-// ═══════════════════════════════════════════════════════════
-// TRADE TABLE
-// ═══════════════════════════════════════════════════════════
-  const tbody = document.getElementById('trade-body');
-  const rows  = tradeRows.slice(1, 21);
-
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="loading">No trades yet</td></tr>';
-    return;
-  }
-
-  document.getElementById('trade-count').textContent = `(latest ${rows.length})`;
-
-  tbody.innerHTML = rows.map(r => {
-    const cols  = Object.values(r);
-    const time  = String(cols[0]||'').substring(0,16);
-    const dir   = String(cols[1]||'');
-    const entry = cols[2]!=null ? '$'+Number(cols[2]).toFixed(2) : '—';
-    const exit  = cols[3]!=null ? '$'+Number(cols[3]).toFixed(2) : '—';
-    const res   = String(cols[4]||'');
-    const pnlV  = cols[5];
-    const pnl   = pnlV!=null ? (pnlV>=0?'+$':'-$')+Math.abs(pnlV).toFixed(2) : '—';
-    const grade = String(cols[6]||'');
-    const pnlCls= pnlV!=null&&pnlV<0 ? 'pnl-n' : 'pnl-p';
-    return `<tr>
-      <td style="color:var(--text-mid)">${time}</td>
-      <td><span class="badge ${dir==='BUY'?'b-buy':'b-sell'}">${dir}</span></td>
-      <td style="color:var(--text)">${entry}</td>
-      <td style="color:var(--text-mid)">${exit}</td>
-      <td><span class="badge ${res==='WIN'?'b-win':'b-loss'}">${res}</span></td>
-      <td class="${pnlCls}">${pnl}</td>
-      <td style="color:var(--gold)">${grade}</td>
-    </tr>`;
-  }).join('');
-}
-
-// ═══════════════════════════════════════════════════════════
-// GOLD PRICE
-// ═══════════════════════════════════════════════════════════
-  try {
-    const res   = await fetch('https://api.metals.live/v1/spot/gold');
-    const data  = await res.json();
-    const price = data[0]?.price || 0;
-    if (price) {
-      document.getElementById('t-price').textContent = '$'+price.toFixed(2);
-      if (prevGold > 0) {
-        const chg = price - prevGold;
-        const el  = document.getElementById('t-chg');
-        el.textContent = (chg>=0?'+':'')+chg.toFixed(2);
-        el.className   = chg>=0 ? 'ticker-pos' : 'ticker-neg';
-      }
-      prevGold = price;
-    }
-  } catch(e) {}
-}
-
-// ═══════════════════════════════════════════════════════════
-// MAIN REFRESH
-// ═══════════════════════════════════════════════════════════
-  try {
-    const [sumRows, sessRows, tradeRows] = await Promise.all([
-      fetchSheet('Summary'),
-      fetchSheet('Session'),
-      fetchSheet('Trades'),
-    ]);
-    const summary = parseSummary(sumRows);
-    updateKPI(summary);
-    drawSessions(sessRows);
-    drawDaily(summary);
-    drawTrades(tradeRows);
-    drawEquity(tradeRows.slice(1));
-  } catch(e) {
-    console.error('Refresh error:', e);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════
-refresh();
-fetchGoldPrice();
-setInterval(refresh, 60000);
-setInterval(fetchGoldPrice, 30000);
-window.addEventListener('resize', ()=>{ refresh(); });
-    const cols  = json.table.cols.map(c => c.label || c.id);
-    const rows  = (json.table.rows || []).map(r =>
-      (r.c || []).reduce((obj, cell, i) => {
-        obj[cols[i]] = cell ? (cell.f || cell.v) : null;
-        return obj;
-      }, {})
-    );
-    return { cols, rows };
-  } catch(e) {
-    console.error('fetchSheet error:', sheetName, e);
-    return { cols:[], rows:[] };
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// PARSE SUMMARY SHEET (key-value format)
-// ═══════════════════════════════════════════════════════════
-  const map = {};
-  (data.rows || []).forEach(r => {
-    const vals = Object.values(r);
-    const key  = String(vals[0] || '').trim();
-    const val  = vals[1];
-    if (key) map[key] = val;
-  });
-  return map;
-}
-
-// ═══════════════════════════════════════════════════════════
-// UPDATE KPIs
-// ═══════════════════════════════════════════════════════════
-  const fmt = (v, prefix='') => v != null ? prefix + v : '—';
-
-  document.getElementById('k-bal').textContent = fmt(summary["Balance"]);
-  document.getElementById('k-wr').textContent  = fmt(summary["Win Rate"]);
-  document.getElementById('k-tot').textContent = fmt(summary["Total Trades"]);
-  document.getElementById('k-wl').textContent  = `${summary["Wins"]||'—'} W / ${summary["Losses"]||'—'} L`;
-  document.getElementById('t-time').textContent= fmt(summary["Last Updated"]);
-
-  const pnl = String(summary["Total PnL"] || '—');
-  const pnlEl = document.getElementById('k-pnl');
-  pnlEl.textContent = pnl;
-  pnlEl.className = 'kpi-value ' + (pnl.startsWith('-') ? 'r' : 'g');
-
-  const avg = String(summary["Avg PnL/Trade"] || '—');
-  const avgEl = document.getElementById('k-avg');
-  avgEl.textContent = avg;
-  avgEl.className = 'kpi-value ' + (avg.startsWith('-') ? 'r' : 'g');
-
-  // Open order
-  const orderStr = String(summary["Status"] || '');
-  const wrap = document.getElementById('order-wrap');
-  if (!orderStr || orderStr === "No Open Position" || orderStr === "null") {
-    wrap.innerHTML = '<div class="no-order">— NO OPEN POSITION —</div>';
-  } else {
-    const parts  = orderStr.split('|').map(s => s.trim());
-    const dirPart= parts[0] || '';
-    const dir    = dirPart.includes('BUY') ? 'BUY' : 'SELL';
-    const cls    = dir.toLowerCase();
-    const entry  = dirPart.replace(dir,'').replace('@','').trim();
-    wrap.innerHTML = `
-      <div class="order-box ${cls}">
-        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:8px">
-          <div class="order-dir ${cls}">${dir}</div>
-          <div class="order-entry">@ ${entry}</div>
-        </div>
-        <div class="order-meta">${parts.slice(1).map(p=>`<span>${p}</span>`).join('<br>')}</div>
-      </div>`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// EQUITY CURVE
-// ═══════════════════════════════════════════════════════════
-  const canvas = document.getElementById('eq-canvas');
-  const W = canvas.offsetWidth || 600;
-  const H = 220;
-  canvas.width = W * window.devicePixelRatio || W;
-  canvas.height = H * window.devicePixelRatio || H;
-  canvas.style.width = W + 'px';
-  canvas.style.height = H + 'px';
-  const ctx = canvas.getContext('2d');
-  if (window.devicePixelRatio > 1) ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-  // Extract balance — column name from Trades sheet
-  const bals = trades.map(t => {
-    const v = t['balance'] || t['Balance'] || t[Object.keys(t).find(k=>k.toLowerCase().includes('balance'))] || 0;
-    return parseFloat(String(v).replace(/[$,]/g,'')) || 0;
-  }).filter(b => b > 0);
-
-  if (bals.length < 2) {
-    ctx.fillStyle = '#2A2318';
-    ctx.font = '11px JetBrains Mono';
-    ctx.textAlign = 'center';
-    ctx.fillText('Loading equity curve...', W/2, H/2);
-    return;
-  }
-
-  const minB = Math.min(...bals) * 0.995;
-  const maxB = Math.max(...bals) * 1.005;
-  const pad  = { l:10, r:80, t:12, b:24 };
-  const iW   = W - pad.l - pad.r;
-  const iH   = H - pad.t - pad.b;
-
-  const toX = i => pad.l + (i / Math.max(bals.length-1, 1)) * iW;
-  const toY = v => pad.t + iH - ((v - minB) / (maxB - minB)) * iH;
-
-  ctx.clearRect(0, 0, W, H);
-
-  // Grid lines
-  for (let g = 0; g <= 4; g++) {
-    const y = pad.t + (g / 4) * iH;
-    const v = maxB - (g / 4) * (maxB - minB);
-    ctx.strokeStyle = '#161616'; ctx.lineWidth = 1;
-    ctx.setLineDash([2, 4]);
-    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#4A3E28'; ctx.font = '9px JetBrains Mono'; ctx.textAlign = 'left';
-    ctx.fillText('$' + v.toLocaleString('en', {maximumFractionDigits:0}), W - pad.r + 8, y + 3);
-  }
-
-  // Gradient fill
-  const grad = ctx.createLinearGradient(0, pad.t, 0, H);
-  grad.addColorStop(0, 'rgba(201,168,76,0.20)');
-  grad.addColorStop(0.7, 'rgba(201,168,76,0.05)');
-  grad.addColorStop(1, 'rgba(201,168,76,0.00)');
-  ctx.beginPath();
-  ctx.moveTo(toX(0), toY(bals[0]));
-  bals.forEach((b, i) => { if (i > 0) ctx.lineTo(toX(i), toY(b)); });
-  ctx.lineTo(toX(bals.length - 1), H - pad.b);
-  ctx.lineTo(toX(0), H - pad.b);
-  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
-
-  // Main line
-  ctx.beginPath();
-  ctx.moveTo(toX(0), toY(bals[0]));
-  bals.forEach((b, i) => { if (i > 0) ctx.lineTo(toX(i), toY(b)); });
-  ctx.strokeStyle = '#C9A84C'; ctx.lineWidth = 1.5; ctx.stroke();
-
-  // WIN/LOSS dots
-  trades.forEach((t, i) => {
-    if (i >= bals.length) return;
-    const res = String(t['result'] || t['Result'] || '');
-    ctx.beginPath();
-    ctx.arc(toX(i), toY(bals[i]), 2, 0, Math.PI * 2);
-    ctx.fillStyle = res === 'WIN' ? '#4CAF7D' : '#E05252';
-    ctx.fill();
-  });
-
-  document.getElementById('eq-range').textContent = `${bals.length} trades`;
-}
-
-// ═══════════════════════════════════════════════════════════
-// SESSION WR
-// ═══════════════════════════════════════════════════════════
-  const wrap = document.getElementById('sess-wrap');
-  const rows = (data.rows || []).filter(r => {
-    const v = Object.values(r)[0];
-    return v && !String(v).toLowerCase().includes('session');
-  });
-
-  if (!rows.length) { wrap.innerHTML = '<div class="loading">No data</div>'; return; }
-
-  wrap.innerHTML = rows.map(r => {
-    const vals   = Object.values(r);
-    const name   = String(vals[0] || '');
-    const trades = vals[1] || 0;
-    const wrRaw  = String(vals[4] || '0');
-    const wrNum  = parseFloat(wrRaw.replace('%',''));
-    const wrDisp = wrNum > 0 ? wrNum.toFixed(1) + '%' : '—';
-    const barW   = Math.min(Math.max(wrNum, 0), 100);
-    const color  = wrNum >= 55 ? '#4CAF7D' : wrNum >= 50 ? '#C9A84C' : '#E05252';
-    return `<div class="sess-row">
-      <div class="sess-name">${name}</div>
-      <div class="sess-bar-bg"><div class="sess-bar-fill" style="width:${barW}%;background:${color}"></div></div>
-      <div class="sess-wr" style="color:${color}">${wrDisp}</div>
-      <div class="sess-n">${trades} tr</div>
-    </div>`;
-  }).join('');
-}
-
-// ═══════════════════════════════════════════════════════════
-// DAILY SUMMARY
-// ═══════════════════════════════════════════════════════════
-  const wrap = document.getElementById('daily-wrap');
-  const todayPnl = String(summary["Today's PnL"] || '$0.00');
-  const items = [
-    { label:'Today Trades',  val: summary['Today Trades']  || '0',       cls:'day-val' },
-    { label:"Today's PnL",   val: todayPnl,                              cls:'day-val ' + (todayPnl.startsWith('-') ? 'red' : 'green') },
-    { label:"Today's WR",    val: summary["Today's WR"]    || '—',       cls:'day-val gold' },
-    { label:'Best Trade',    val: summary['Best Trade']    || '—',       cls:'day-val green' },
-    { label:'Worst Trade',   val: summary['Worst Trade']   || '—',       cls:'day-val red' },
-    { label:'Avg Win',       val: summary['Avg Win']       || '—',       cls:'day-val green' },
-  ];
-  wrap.innerHTML = items.map(item => `
-    <div class="day-row">
-      <div class="day-label">${item.label}</div>
-      <div class="${item.cls}">${item.val != null ? item.val : '—'}</div>
-    </div>`).join('');
-}
-
-// ═══════════════════════════════════════════════════════════
-// TRADE TABLE — use column names directly
-// ═══════════════════════════════════════════════════════════
-  const tbody = document.getElementById('trade-body');
-  const rows  = (data.rows || []).slice(0, 20);
-
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="loading">No trades yet</td></tr>';
-    return;
-  }
-
-  document.getElementById('trade-count').textContent = `(latest ${rows.length})`;
-
-  // Find column keys (case insensitive)
-  const findKey = (obj, ...names) => Object.keys(obj).find(k => names.some(n => k.toLowerCase().includes(n.toLowerCase()))) || '';
-
-  tbody.innerHTML = rows.map(r => {
-    const tKey   = findKey(r, 'close_time', 'time', 'date');
-    const dirKey = findKey(r, 'direction', 'dir');
-    const entKey = findKey(r, 'entry');
-    const extKey = findKey(r, 'exit');
-    const resKey = findKey(r, 'result');
-    const pnlKey = findKey(r, 'pnl');
-    const grKey  = findKey(r, 'grade');
-
-    const time  = String(r[tKey]   || '').substring(0, 16);
-    const dir   = String(r[dirKey] || '');
-    const entry = r[entKey] != null ? Number(r[entKey]).toFixed(2) : '—';
-    const exit  = r[extKey] != null ? Number(r[extKey]).toFixed(2) : '—';
-    const res   = String(r[resKey] || '');
-    const pnlV  = r[pnlKey];
-    const pnl   = pnlV != null ? (pnlV >= 0 ? '+$' : '-$') + Math.abs(pnlV).toFixed(2) : '—';
-    const grade = String(r[grKey]  || '');
-    const pnlCls= pnlV != null && pnlV < 0 ? 'pnl-n' : 'pnl-p';
-
-    return `<tr>
-      <td style="color:var(--text-mid);font-size:11px">${time}</td>
-      <td><span class="badge ${dir==='BUY'?'b-buy':'b-sell'}">${dir}</span></td>
-      <td style="color:var(--text)">$${entry}</td>
-      <td style="color:var(--text-mid)">$${exit}</td>
-      <td><span class="badge ${res==='WIN'?'b-win':'b-loss'}">${res}</span></td>
-      <td class="${pnlCls}" style="font-size:12px">${pnl}</td>
-      <td style="color:var(--gold)">${grade}</td>
-    </tr>`;
-  }).join('');
-}
-
-// ═══════════════════════════════════════════════════════════
-// GOLD PRICE
-// ═══════════════════════════════════════════════════════════
-  try {
-    const res   = await fetch('https://api.metals.live/v1/spot/gold');
-    const data  = await res.json();
-    const price = data[0]?.price || 0;
-    if (price) {
-      document.getElementById('t-price').textContent = '$' + price.toFixed(2);
-      if (prevGold > 0) {
-        const chg = price - prevGold;
-        const el  = document.getElementById('t-chg');
-        el.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2);
-        el.className   = chg >= 0 ? 'ticker-pos' : 'ticker-neg';
-      }
-      prevGold = price;
-    }
-  } catch(e) {}
-}
-
-// ═══════════════════════════════════════════════════════════
-// MAIN REFRESH
-// ═══════════════════════════════════════════════════════════
-  try {
-    const [sumData, sessData, tradeData] = await Promise.all([
-      fetchSheet('Summary'),
-      fetchSheet('Session'),
-      fetchSheet('Trades'),
-    ]);
-    const summary = parseSummary(sumData);
-    updateKPI(summary);
-    drawSessions(sessData);
-    drawDaily(summary);
-    drawTrades(tradeData);
-    drawEquity(tradeData.rows || []);
-  } catch(e) {
-    console.error('Refresh error:', e);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════
-refresh();
-fetchGoldPrice();
-setInterval(refresh, 60000);
-setInterval(fetchGoldPrice, 30000);
-window.addEventListener('resize', () => { refresh(); });
-
-// ═══════════════════════════════════════════════════════════
-// PARSE SUMMARY SHEET
-// ═══════════════════════════════════════════════════════════
 function parseSummary(rows) {
   const map = {};
   rows.forEach(r => {
@@ -941,8 +394,6 @@ function parseSummary(rows) {
   return map;
 }
 
-// ═══════════════════════════════════════════════════════════
-// UPDATE KPIs
 // ═══════════════════════════════════════════════════════════
 function updateKPI(summary) {
   const bal = summary["Balance"] || "—";
@@ -987,8 +438,6 @@ function updateKPI(summary) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// EQUITY CURVE
 // ═══════════════════════════════════════════════════════════
 function drawEquity(trades) {
   const canvas = document.getElementById('eq-canvas');
@@ -1052,8 +501,6 @@ function drawEquity(trades) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// SESSION WR
-// ═══════════════════════════════════════════════════════════
 function drawSessions(sessRows) {
   const wrap = document.getElementById('sess-wrap');
   if (!sessRows.length) { wrap.innerHTML='<div class="loading">No data</div>'; return; }
@@ -1075,8 +522,6 @@ function drawSessions(sessRows) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// DAILY SUMMARY
-// ═══════════════════════════════════════════════════════════
 function drawDaily(summary) {
   const today = new Date().toISOString().split('T')[0];
   const wrap  = document.getElementById('daily-wrap');
@@ -1097,8 +542,6 @@ function drawDaily(summary) {
     </div>`).join('');
 }
 
-// ═══════════════════════════════════════════════════════════
-// TRADE TABLE
 // ═══════════════════════════════════════════════════════════
 function drawTrades(tradeRows) {
   const tbody = document.getElementById('trade-body');
@@ -1134,8 +577,6 @@ function drawTrades(tradeRows) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// GOLD PRICE
-// ═══════════════════════════════════════════════════════════
 let prevGold = 0;
 async function fetchGoldPrice() {
   try {
@@ -1155,8 +596,6 @@ async function fetchGoldPrice() {
   } catch(e) {}
 }
 
-// ═══════════════════════════════════════════════════════════
-// MAIN REFRESH
 // ═══════════════════════════════════════════════════════════
 async function refresh() {
   try {
@@ -1178,13 +617,6 @@ async function refresh() {
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════
-refresh();
-fetchGoldPrice();
-setInterval(refresh, 60000);
-setInterval(fetchGoldPrice, 30000);
 window.addEventListener('resize', ()=>{ refresh(); });
 </script>
 </body>
