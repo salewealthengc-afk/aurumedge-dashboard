@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AurumEdge AI — Live Performance</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gold: #C9A84C;
+  --gold-light: #E8D49A;
+  --gold-dim: #8A6E2F;
+  --gold-glow: rgba(201,168,76,0.15);
+  --bg: #060606;
+  --bg-card: #0C0C0C;
+  --bg-card2: #111111;
+  --border: #1C1C1C;
+  --border-gold: #2A2318;
+  --text: #E8E0D0;
+  --text-dim: #6A6050;
+  --text-mid: #A09080;
+  --green: #4CAF7D;
+  --red: #E05252;
+  --green-bg: rgba(76,175,125,0.08);
+  --red-bg: rgba(224,82,82,0.08);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grain */
+body::after {
+  content:''; position:fixed; inset:0;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:9999; opacity:0.5;
+}
+
+/* Ticker bar */
+.ticker {
+  background: linear-gradient(90deg, #0A0804, #080604, #0A0804);
+  border-bottom: 1px solid var(--border-gold);
+  padding: 7px 32px;
+  display: flex; align-items: center; gap: 28px;
+  font-size: 10px; letter-spacing: 0.08em;
+  overflow: hidden;
+}
+.ticker-item { display:flex; align-items:center; gap:8px; white-space:nowrap; }
+.ticker-label { color: var(--text-dim); letter-spacing: 0.2em; font-size: 9px; }
+.ticker-val { color: var(--text); }
+.ticker-gold { color: var(--gold); font-size: 14px; }
+.ticker-pos { color: var(--green); }
+.ticker-neg { color: var(--red); }
+.live-pulse { width:5px; height:5px; background:var(--green); border-radius:50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(1.4)} }
+
+/* Header */
+.header {
+  padding: 28px 40px 24px;
+  border-bottom: 1px solid var(--border-gold);
+  background: linear-gradient(180deg, #0C0904 0%, transparent 100%);
+  display: flex; align-items: flex-end; justify-content: space-between;
+}
+.brand { display:flex; flex-direction:column; gap:6px; }
+.brand-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 36px; font-weight: 300;
+  letter-spacing: 0.25em; color: var(--gold);
+  line-height: 1;
+}
+.brand-sub {
+  font-size: 9px; letter-spacing: 0.4em;
+  color: var(--text-dim); text-transform: uppercase;
+}
+.header-meta { text-align:right; }
+.header-meta-row { font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; margin-bottom:3px; }
+.header-meta-row span { color: var(--text-mid); }
+
+/* Container */
+.wrap { max-width: 1360px; margin: 0 auto; padding: 28px 32px; }
+
+/* KPI row */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 10px; margin-bottom: 20px;
+}
+.kpi {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 18px 16px 14px;
+  position: relative; overflow: hidden;
+  transition: border-color 0.3s;
+}
+.kpi::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg, transparent 0%, var(--gold-dim) 50%, transparent 100%);
+  opacity: 0.4;
+}
+.kpi:hover { border-color: var(--border-gold); }
+.kpi-label { font-size:8px; letter-spacing:0.3em; color:var(--text-dim); text-transform:uppercase; margin-bottom:10px; }
+.kpi-value {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 30px; font-weight: 300; line-height: 1;
+  color: var(--gold);
+}
+.kpi-value.g { color: var(--green); }
+.kpi-value.r { color: var(--red); }
+.kpi-value.w { color: var(--text); }
+.kpi-sub { font-size: 10px; color: var(--text-dim); margin-top: 5px; }
+
+/* Main grid */
+.main-grid { display:grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+.side-grid { display:flex; flex-direction:column; gap:16px; }
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 22px;
+  position: relative; overflow: hidden;
+  animation: fadeUp 0.6s ease both;
+}
+.card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dim) 40%, transparent);
+  opacity: 0.35;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+
+.card-title {
+  font-size:8px; letter-spacing:0.35em; color:var(--text-dim);
+  text-transform:uppercase; margin-bottom:18px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+
+/* Equity chart */
+#eq-canvas { width:100%; height:220px; display:block; }
+
+/* Open order */
+.order-box {
+  border: 1px solid var(--border);
+  padding: 16px;
+  background: var(--bg-card2);
+  position: relative;
+}
+.order-box.buy { border-left: 2px solid var(--green); }
+.order-box.sell { border-left: 2px solid var(--red); }
+.order-dir {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px; font-weight: 600;
+}
+.order-dir.buy { color: var(--green); }
+.order-dir.sell { color: var(--red); }
+.order-entry { font-size:18px; color:var(--text); margin: 4px 0; }
+.order-meta { font-size:10px; color:var(--text-dim); line-height: 1.8; }
+.order-pnl {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px; font-weight: 300;
+  margin-top: 8px;
+}
+.order-pnl.pos { color: var(--green); }
+.order-pnl.neg { color: var(--red); }
+.no-order {
+  text-align:center; padding:28px 16px;
+  color:var(--text-dim); font-size:10px; letter-spacing:0.2em;
+}
+
+/* Session bars */
+.sess-row {
+  display:flex; align-items:center; gap:10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.sess-row:last-child { border-bottom: none; }
+.sess-name { width:74px; font-size:10px; color:var(--text-mid); }
+.sess-bar-bg { flex:1; height:3px; background:var(--border); }
+.sess-bar-fill { height:100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); transition:width 1.2s ease; }
+.sess-wr { width:44px; text-align:right; color:var(--gold); font-size:11px; }
+.sess-n { width:52px; text-align:right; color:var(--text-dim); font-size:10px; }
+
+/* Daily summary */
+.day-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding: 7px 0; border-bottom: 1px solid var(--border);
+}
+.day-row:last-child { border-bottom:none; }
+.day-label { font-size:10px; color:var(--text-dim); letter-spacing:0.08em; }
+.day-val { font-size:12px; }
+.day-val.gold { color:var(--gold); }
+.day-val.green { color:var(--green); }
+.day-val.red { color:var(--red); }
+
+/* Trade table */
+.trade-wrap { overflow:auto; max-height:260px; }
+.trade-tbl { width:100%; border-collapse:collapse; }
+.trade-tbl th {
+  font-size:8px; letter-spacing:0.25em; color:var(--text-dim);
+  text-transform:uppercase; padding:7px 10px;
+  border-bottom: 1px solid var(--border); text-align:left;
+  position:sticky; top:0; background:var(--bg-card);
+}
+.trade-tbl td {
+  padding:9px 10px; font-size:11px; color:var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.trade-tbl tr:hover td { background: var(--bg-card2); }
+.badge {
+  display:inline-block; padding:2px 7px;
+  font-size:8px; letter-spacing:0.15em;
+}
+.b-buy  { background:var(--green-bg); color:var(--green); }
+.b-sell { background:var(--red-bg);   color:var(--red);   }
+.b-win  { background:var(--green-bg); color:var(--green); }
+.b-loss { background:var(--red-bg);   color:var(--red);   }
+.pnl-p { color:var(--green); }
+.pnl-n { color:var(--red); }
+
+/* Footer */
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 14px 32px; text-align:center;
+  font-size: 8px; color:var(--text-dim); letter-spacing:0.25em;
+}
+
+/* Loading */
+.loading {
+  display:flex; align-items:center; justify-content:center;
+  height:80px; color:var(--text-dim); font-size:10px; letter-spacing:0.2em;
+}
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-item"><div class="live-pulse"></div><span style="color:var(--green);letter-spacing:.2em;font-size:9px">LIVE</span></div>
+  <div class="ticker-item"><span class="ticker-label">XAUUSD</span><span class="ticker-gold" id="t-price">—</span><span id="t-chg">—</span></div>
+  <div class="ticker-item"><span class="ticker-label">SYSTEM</span><span class="ticker-val">AurumEdge AI v4.0</span></div>
+  <div class="ticker-item"><span class="ticker-label">BROKER</span><span class="ticker-val">Connext LLC · Cent</span></div>
+  <div class="ticker-item"><span class="ticker-label">UPDATED</span><span class="ticker-val" id="t-time">—</span></div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="brand">
+    <div class="brand-name">AURUMEDGE&nbsp;&nbsp;AI</div>
+    <div class="brand-sub">Algorithmic Gold Trading · XAUUSD · Machine Learning</div>
+  </div>
+  <div class="header-meta">
+    <div class="header-meta-row">Symbol &nbsp;<span>XAUUSD.m</span></div>
+    <div class="header-meta-row">Broker &nbsp;<span>Connext LLC · Cent Account</span></div>
+    <div class="header-meta-row">Strategy &nbsp;<span>Algorithmic · Auto Signal</span></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="wrap">
+
+  <!-- KPI -->
+  <div class="kpi-row">
+    <div class="card kpi">
+      <div class="kpi-label">Balance</div>
+      <div class="kpi-value gold" id="k-bal">—</div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-label">Total PnL</div>
+      <div class="kpi-value" id="k-pnl">—</div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-label">Win Rate</div>
+      <div class="kpi-value w" id="k-wr">—</div>
+      <div class="kpi-sub" id="k-wl">— W / — L</div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-label">Total Trades</div>
+      <div class="kpi-value w" id="k-tot">—</div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-label">Avg PnL / Trade</div>
+      <div class="kpi-value" id="k-avg">—</div>
+    </div>
+  </div>
+
+  <!-- Main + Side -->
+  <div class="main-grid">
+
+    <!-- Left: Chart + Trades -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Equity Curve <span id="eq-range" style="font-size:9px;color:var(--text-dim)"></span></div>
+        <canvas id="eq-canvas"></canvas>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Recent Trades <span id="trade-count" style="font-size:9px"></span></div>
+        <div class="trade-wrap">
+          <table class="trade-tbl">
+            <thead>
+              <tr>
+                <th>Date / Time</th>
+                <th>Dir</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th>Result</th>
+                <th>PnL</th>
+                <th>Grade</th>
+              </tr>
+            </thead>
+            <tbody id="trade-body">
+              <tr><td colspan="7" class="loading">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Open + Session + Daily -->
+    <div class="side-grid">
+
+      <div class="card">
+        <div class="card-title">Open Position</div>
+        <div id="order-wrap"><div class="no-order">— NO OPEN POSITION —</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Win Rate by Session</div>
+        <div id="sess-wrap"><div class="loading">Loading...</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Today's Summary</div>
+        <div id="daily-wrap"><div class="loading">Loading...</div></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  AURUMEDGE AI &nbsp;·&nbsp; XAUUSD.m &nbsp;·&nbsp; CONNEXT LLC &nbsp;·&nbsp;
+  Algorithmic Gold Trading &nbsp;·&nbsp;
+  Past performance does not guarantee future results
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG — แก้ SHEET_ID ให้ตรงกับของคุณ
+// ═══════════════════════════════════════════════════════════
+const SHEET_ID   = "1ap5EdgmZFh8rSnlG_W0HlA2sRFK4ImWTrTS-VO5EGyo";
+const API_KEY    = "";  // ถ้า public sheet ไม่ต้องใส่ API key
+const BASE_URL   = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
+
+// ═══════════════════════════════════════════════════════════
+// FETCH GOOGLE SHEETS DATA
+// ═══════════════════════════════════════════════════════════
+async function fetchSheet(sheetName) {
+  try {
+    const url = BASE_URL + encodeURIComponent(sheetName) + '&t=' + Date.now();
+    const res  = await fetch(url);
+    const text = await res.text();
+    // Google returns: google.visualization.Query.setResponse({...})
+    const json = JSON.parse(text.substring(47, text.length - 2));
+    const cols = json.table.cols.map(c => c.label);
+    const rows = json.table.rows.map(r =>
+      r.c.reduce((obj, cell, i) => {
+        obj[cols[i]] = cell ? cell.v : null;
+        return obj;
+      }, {})
+    );
+    return rows;
+  } catch(e) {
+    console.error('fetchSheet error:', sheetName, e);
+    return [];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PARSE SUMMARY SHEET
+// ═══════════════════════════════════════════════════════════
+function parseSummary(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const key = r[Object.keys(r)[0]];
+    const val = r[Object.keys(r)[1]];
+    if (key) map[key] = val;
+  });
+  return map;
+}
+
+// ═══════════════════════════════════════════════════════════
+// UPDATE KPIs
+// ═══════════════════════════════════════════════════════════
+function updateKPI(summary) {
+  const bal = summary["Balance"] || "—";
+  const pnl = summary["Total PnL"] || "—";
+  const wr  = summary["Win Rate"] || "—";
+  const tot = summary["Total Trades"] || "—";
+  const avg = summary["Avg PnL/Trade"] || "—";
+  const wins= summary["Wins"] || "—";
+  const loss= summary["Losses"] || "—";
+  const upd = summary["Last Updated"] || "—";
+
+  document.getElementById('k-bal').textContent = bal;
+  document.getElementById('k-wr').textContent  = wr;
+  document.getElementById('k-tot').textContent = tot;
+  document.getElementById('k-wl').textContent  = `${wins} W / ${loss} L`;
+  document.getElementById('t-time').textContent= upd;
+
+  const pnlEl = document.getElementById('k-pnl');
+  pnlEl.textContent = pnl;
+  pnlEl.className = 'kpi-value ' + (String(pnl).startsWith('-') ? 'r' : 'g');
+
+  const avgEl = document.getElementById('k-avg');
+  avgEl.textContent = avg;
+  avgEl.className = 'kpi-value ' + (String(avg).startsWith('-') ? 'r' : 'g');
+
+  // Open order
+  const orderStr = summary["Status"] || "";
+  const wrap = document.getElementById('order-wrap');
+  if (!orderStr || orderStr === "No Open Position") {
+    wrap.innerHTML = '<div class="no-order">— NO OPEN POSITION —</div>';
+  } else {
+    const parts = orderStr.split('|').map(s => s.trim());
+    const dirPart = parts[0] || '';
+    const dir = dirPart.includes('BUY') ? 'BUY' : dirPart.includes('SELL') ? 'SELL' : '';
+    const cls = dir.toLowerCase();
+    wrap.innerHTML = `
+      <div class="order-box ${cls}">
+        <div class="order-dir ${cls}">${dir}</div>
+        <div class="order-entry">${dirPart.replace(dir,'').replace('@','').trim()}</div>
+        <div class="order-meta">${parts.slice(1).join('&nbsp;|&nbsp;')}</div>
+      </div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// EQUITY CURVE
+// ═══════════════════════════════════════════════════════════
+function drawEquity(trades) {
+  const canvas = document.getElementById('eq-canvas');
+  const W = canvas.offsetWidth || 600;
+  const H = 220;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  const bals = trades.map(t => parseFloat(String(t.balance||t.Balance||0).replace(/[$,]/g,''))).filter(b=>b>0);
+  if (bals.length < 2) return;
+
+  const minB = Math.min(...bals) * 0.997;
+  const maxB = Math.max(...bals) * 1.003;
+  const pad  = { l:8, r:70, t:10, b:20 };
+  const iW   = W - pad.l - pad.r;
+  const iH   = H - pad.t - pad.b;
+
+  const toX = i => pad.l + (i / (bals.length-1)) * iW;
+  const toY = v => pad.t + iH - ((v-minB)/(maxB-minB)) * iH;
+
+  ctx.clearRect(0,0,W,H);
+
+  // Grid
+  for (let g=0; g<=4; g++) {
+    const y = pad.t + (g/4)*iH;
+    const v = maxB - (g/4)*(maxB-minB);
+    ctx.strokeStyle='#181818'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
+    ctx.fillStyle='#3A3020'; ctx.font='9px JetBrains Mono';
+    ctx.fillText('$'+v.toFixed(0), W-pad.r+6, y+4);
+  }
+
+  // Fill gradient
+  const grad = ctx.createLinearGradient(0,pad.t,0,H);
+  grad.addColorStop(0,'rgba(201,168,76,0.18)');
+  grad.addColorStop(1,'rgba(201,168,76,0.00)');
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(bals[0]));
+  bals.forEach((b,i)=>{ if(i>0) ctx.lineTo(toX(i), toY(b)); });
+  ctx.lineTo(toX(bals.length-1), H-pad.b);
+  ctx.lineTo(toX(0), H-pad.b);
+  ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(bals[0]));
+  bals.forEach((b,i)=>{ if(i>0) ctx.lineTo(toX(i), toY(b)); });
+  ctx.strokeStyle='#C9A84C'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // Dots
+  trades.forEach((t,i)=>{
+    const res = t.result || t.Result || '';
+    ctx.beginPath();
+    ctx.arc(toX(i), toY(bals[i]), 2.5, 0, Math.PI*2);
+    ctx.fillStyle = res==='WIN' ? '#4CAF7D' : '#E05252';
+    ctx.fill();
+  });
+
+  document.getElementById('eq-range').textContent =
+    trades.length > 0 ? `${trades.length} trades` : '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// SESSION WR
+// ═══════════════════════════════════════════════════════════
+function drawSessions(sessRows) {
+  const wrap = document.getElementById('sess-wrap');
+  if (!sessRows.length) { wrap.innerHTML='<div class="loading">No data</div>'; return; }
+
+  wrap.innerHTML = sessRows.slice(1).map(r => {
+    const cols  = Object.values(r);
+    const name  = cols[0] || '';
+    const trades= cols[1] || 0;
+    const wr    = cols[4] || '0%';
+    const pnl   = cols[5] || '$0';
+    const wrNum = parseFloat(wr);
+    return `<div class="sess-row">
+      <div class="sess-name">${name}</div>
+      <div class="sess-bar-bg"><div class="sess-bar-fill" style="width:${Math.min(wrNum,100)}%"></div></div>
+      <div class="sess-wr">${wr}</div>
+      <div class="sess-n">${trades} tr</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// DAILY SUMMARY
+// ═══════════════════════════════════════════════════════════
+function drawDaily(summary) {
+  const today = new Date().toISOString().split('T')[0];
+  const wrap  = document.getElementById('daily-wrap');
+
+  const items = [
+    { label:'Today Trades',  val: summary['Today Trades']  || '0',     cls:'day-val' },
+    { label:"Today's PnL",   val: summary["Today's PnL"]   || '$0.00',  cls:'day-val '+(String(summary["Today's PnL"]||'').startsWith('-')?'red':'green') },
+    { label:"Today's WR",    val: summary["Today's WR"]    || '—',     cls:'day-val gold' },
+    { label:'Best Trade',    val: summary['Best Trade']    || '—',     cls:'day-val green' },
+    { label:'Worst Trade',   val: summary['Worst Trade']   || '—',     cls:'day-val red' },
+    { label:'Avg Win',       val: summary['Avg Win']       || '—',     cls:'day-val green' },
+  ];
+
+  wrap.innerHTML = items.map(item=>`
+    <div class="day-row">
+      <div class="day-label">${item.label}</div>
+      <div class="${item.cls}">${item.val}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRADE TABLE
+// ═══════════════════════════════════════════════════════════
+function drawTrades(tradeRows) {
+  const tbody = document.getElementById('trade-body');
+  const rows  = tradeRows.slice(1, 21); // ล่าสุด 20 trades
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">No trades yet</td></tr>';
+    return;
+  }
+
+  document.getElementById('trade-count').textContent = `(latest ${rows.length})`;
+
+  tbody.innerHTML = rows.map(r => {
+    const cols = Object.values(r);
+    const time = String(cols[0]||'').substring(0,16);
+    const dir  = String(cols[1]||'');
+    const entry= cols[2] || '—';
+    const exit = cols[3] || '—';
+    const res  = String(cols[4]||'');
+    const pnl  = String(cols[5]||'');
+    const grade= String(cols[6]||'');
+    const pnlCls = pnl.startsWith('-') ? 'pnl-n' : 'pnl-p';
+    return `<tr>
+      <td style="color:var(--text-mid)">${time}</td>
+      <td><span class="badge ${dir==='BUY'?'b-buy':'b-sell'}">${dir}</span></td>
+      <td>${entry}</td>
+      <td>${exit}</td>
+      <td><span class="badge ${res==='WIN'?'b-win':'b-loss'}">${res}</span></td>
+      <td class="${pnlCls}">${pnl}</td>
+      <td style="color:var(--gold)">${grade}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// GOLD PRICE
+// ═══════════════════════════════════════════════════════════
+let prevGold = 0;
+async function fetchGoldPrice() {
+  try {
+    const res  = await fetch('https://api.metals.live/v1/spot/gold');
+    const data = await res.json();
+    const price = data[0]?.price || 0;
+    if (price) {
+      document.getElementById('t-price').textContent = '$' + price.toFixed(2);
+      const chg = price - prevGold;
+      if (prevGold > 0) {
+        const el  = document.getElementById('t-chg');
+        el.textContent = (chg>=0?'+':'') + chg.toFixed(2);
+        el.className   = chg>=0 ? 'ticker-pos' : 'ticker-neg';
+      }
+      prevGold = price;
+    }
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN REFRESH
+// ═══════════════════════════════════════════════════════════
+async function refresh() {
+  try {
+    const [sumRows, sessRows, tradeRows] = await Promise.all([
+      fetchSheet('Summary'),
+      fetchSheet('Session'),
+      fetchSheet('Trades'),
+    ]);
+
+    const summary = parseSummary(sumRows);
+    updateKPI(summary);
+    drawSessions(sessRows);
+    drawDaily(summary);
+    drawTrades(tradeRows);
+    drawEquity(tradeRows.slice(1));
+
+  } catch(e) {
+    console.error('Refresh error:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+refresh();
+fetchGoldPrice();
+setInterval(refresh, 60000);
+setInterval(fetchGoldPrice, 30000);
+window.addEventListener('resize', ()=>{ refresh(); });
+</script>
+</body>
+</html>
